@@ -1,0 +1,95 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #171610;
+}
+
+body {
+  color: #e7e1ce;
+  font-family: "Courier New", monospace;
+}
+
+#app canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+}
+
+.pause-menu {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 8, 6, 0.76);
+}
+
+.pause-menu[hidden] {
+  display: none;
+}
+
+.pause-panel {
+  width: min(330px, calc(100vw - 40px));
+  padding: 30px 28px 24px;
+  border: 1px solid rgba(223, 215, 185, 0.16);
+  background: rgba(19, 19, 15, 0.92);
+}
+
+.menu-title {
+  margin: 0 0 28px;
+  color: rgba(235, 228, 204, 0.8);
+  font-size: 11px;
+  letter-spacing: 0.19em;
+}
+
+.menu-row,
+.sensitivity-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 17px 0;
+  color: rgba(235, 228, 204, 0.54);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.menu-row span:last-child,
+.sensitivity-row output {
+  color: rgba(235, 228, 204, 0.9);
+  text-align: right;
+}
+
+#sensitivity {
+  width: 100%;
+  margin: 2px 0 24px;
+  accent-color: #b5a66c;
+  cursor: pointer;
+}
+
+#continue-button {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid rgba(223, 215, 185, 0.32);
+  background: transparent;
+  color: #e7e1ce;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  cursor: pointer;
+}
+
+#continue-button:hover,
+#continue-button:focus-visible {
+  background: rgba(223, 215, 185, 0.1);
+  outline: none;
+}
