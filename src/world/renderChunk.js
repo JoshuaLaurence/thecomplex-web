@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { CEILING_PANEL_X, CEILING_PANEL_Z } from "./generator.js";
+import { getSurfaceMaps } from "./surfaceTextures.js";
 
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
 const materials = new Map();
@@ -38,15 +39,29 @@ const palettes = {
 function getMaterials(style) {
   if (!materials.has(style)) {
     const palette = palettes[style] ?? palettes.classic;
+    const wallpaper = getSurfaceMaps(style, "wall");
+    const carpet = getSurfaceMaps(style, "floor");
+    const wall = new THREE.MeshStandardMaterial({
+      map: wallpaper.map,
+      normalMap: wallpaper.normalMap,
+      roughnessMap: wallpaper.roughnessMap,
+      roughness: 0.94,
+      metalness: 0,
+    });
+    wall.normalScale.set(0.65, 0.65);
+    wall.userData.worldTileSize = 0.48;
+    const floor = new THREE.MeshStandardMaterial({
+      map: carpet.map,
+      normalMap: carpet.normalMap,
+      roughnessMap: carpet.roughnessMap,
+      roughness: 0.98,
+      metalness: 0,
+    });
+    floor.normalScale.set(0.55, 0.55);
+    floor.userData.worldTileSize = 2.1;
     materials.set(style, {
-      wall: new THREE.MeshStandardMaterial({
-        color: palette.wall,
-        roughness: 0.96,
-      }),
-      floor: new THREE.MeshStandardMaterial({
-        color: palette.floor,
-        roughness: 1,
-      }),
+      wall,
+      floor,
       ceilingTile: new THREE.MeshStandardMaterial({
         color: palette.ceilingTile,
         roughness: 0.96,
@@ -68,13 +83,54 @@ function getMaterials(style) {
   return materials.get(style);
 }
 
-function addBox(parent, material, position, size) {
-  const mesh = new THREE.Mesh(unitBox, material);
+function addBox(parent, material, position, size, castShadow = false) {
+  let geometry = unitBox;
+  if (material.userData.worldTileSize) {
+    geometry = unitBox.clone();
+    const uv = geometry.attributes.uv;
+    const normal = geometry.attributes.normal;
+    const [width, height, depth] = size;
+    const tileSize = material.userData.worldTileSize;
+
+    for (let vertex = 0; vertex < uv.count; vertex += 1) {
+      const nx = Math.abs(normal.getX(vertex));
+      const ny = Math.abs(normal.getY(vertex));
+      const uMeters = ny > 0.5 ? width : nx > 0.5 ? depth : width;
+      const vMeters = ny > 0.5 ? depth : height;
+      uv.setXY(
+        vertex,
+        uv.getX(vertex) * (uMeters / tileSize),
+        uv.getY(vertex) * (vMeters / tileSize),
+      );
+    }
+
+    uv.needsUpdate = true;
+  }
+
+  const mesh = new THREE.Mesh(geometry, material);
   mesh.position.set(...position);
   mesh.scale.set(...size);
   mesh.receiveShadow = true;
+  mesh.castShadow = castShadow;
+  if (geometry !== unitBox) mesh.userData.ownedGeometry = true;
   parent.add(mesh);
   return mesh;
+}
+
+function addFloor(parent, material, size) {
+  const geometry = new THREE.PlaneGeometry(size, size);
+  const uv = geometry.attributes.uv;
+  const repeats = size / material.userData.worldTileSize;
+  for (let vertex = 0; vertex < uv.count; vertex += 1) {
+    uv.setXY(vertex, uv.getX(vertex) * repeats, uv.getY(vertex) * repeats);
+  }
+  uv.needsUpdate = true;
+
+  const floor = new THREE.Mesh(geometry, material);
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  floor.userData.ownedGeometry = true;
+  parent.add(floor);
 }
 
 function addCeilingTiles(parent, material, size, wallHeight, fixtures) {
@@ -173,13 +229,9 @@ export function renderChunk(descriptor) {
     })),
   };
   group.userData.ceilingGridMaterial = materialsForStyle.ceilingGrid;
+  group.userData.spotLights = [];
 
-  addBox(
-    group,
-    materialsForStyle.floor,
-    [0, -0.08, 0],
-    [descriptor.size, 0.16, descriptor.size],
-  );
+  addFloor(group, materialsForStyle.floor, descriptor.size);
   addCeilingTiles(
     group,
     materialsForStyle.ceilingTile,
@@ -189,7 +241,7 @@ export function renderChunk(descriptor) {
   );
 
   for (const wall of descriptor.walls) {
-    addBox(group, materialsForStyle.wall, wall.center, wall.size);
+    addBox(group, materialsForStyle.wall, wall.center, wall.size, true);
   }
 
   for (const fixture of descriptor.fixtures) {
@@ -204,12 +256,25 @@ export function renderChunk(descriptor) {
       1,
       9,
       Math.PI / 3,
-      0.35,
+      0.65,
       2,
     );
-    light.power = 2200;
+    light.power = 1300;
     light.position.set(fixture.x, descriptor.wallHeight + 0.12, fixture.z);
     light.target.position.set(fixture.x, descriptor.wallHeight - 4, fixture.z);
+    light.userData.worldX = worldX + fixture.x;
+    light.userData.worldZ = worldZ + fixture.z;
+    light.userData.fullIntensity = light.intensity;
+    light.castShadow = false;
+    light.shadow.mapSize.set(512, 512);
+    light.shadow.camera.near = 0.1;
+    light.shadow.camera.far = 9;
+    light.shadow.camera.fov = THREE.MathUtils.radToDeg(light.angle * 2);
+    light.shadow.camera.updateProjectionMatrix();
+    light.shadow.bias = -0.00015;
+    light.shadow.normalBias = 0.025;
+    light.shadow.autoUpdate = false;
+    group.userData.spotLights.push(light);
     group.add(light, light.target);
   }
 

@@ -34,6 +34,10 @@ export class ChunkWorld {
     for (const [key, group] of this.chunks) {
       if (!wanted.has(key)) {
         this.scene.remove(group);
+        group.traverse((object) => {
+          if (object.userData.ownedGeometry) object.geometry.dispose();
+          if (object.isSpotLight) object.dispose();
+        });
         this.chunks.delete(key);
         changed = true;
       }
@@ -47,5 +51,31 @@ export class ChunkWorld {
 
   getColliders() {
     return this.colliders;
+  }
+
+  updateLightingAt(worldX, worldZ, shadowLightLimit = 6) {
+    const lights = [...this.chunks.values()].flatMap(
+      (group) => group.userData.spotLights,
+    );
+    lights.sort((a, b) => {
+      const distanceA =
+        (a.userData.worldX - worldX) ** 2 + (a.userData.worldZ - worldZ) ** 2;
+      const distanceB =
+        (b.userData.worldX - worldX) ** 2 + (b.userData.worldZ - worldZ) ** 2;
+      return distanceA - distanceB;
+    });
+
+    for (let index = 0; index < lights.length; index += 1) {
+      const light = lights[index];
+      const castsShadow = index < shadowLightLimit;
+      if (light.castShadow !== castsShadow) {
+        light.castShadow = castsShadow;
+        light.shadow.needsUpdate = castsShadow;
+      }
+
+      // Distant non-shadowed lamps stay faint rather than illuminating through walls.
+      light.intensity =
+        light.userData.fullIntensity * (castsShadow ? 1 : 0.035);
+    }
   }
 }
